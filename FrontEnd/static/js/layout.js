@@ -1,6 +1,4 @@
 const logoutButton = document.getElementById('logoutButton');
-const postsContainer = document.querySelector(".posts-container");
-const posts = postsContainer.querySelectorAll(".post");
 
 if (logoutButton) {
     logoutButton.addEventListener('click', function () {
@@ -42,14 +40,17 @@ if (logoutButton) {
 document.addEventListener("DOMContentLoaded", () => {
     // Select all sidebar links
     const communityLinks = document.querySelectorAll(".sidebar .sidebar-link");
-    // Select the posts container
+    // Select all posts
+    const posts = document.querySelectorAll(".post");
 
     // Function to filter posts on the homepage
     const filterPosts = (selectedCategory) => {
-        
         posts.forEach(post => {
-            const postCategory = post.getAttribute("data-category")?.toLowerCase() || "";
-            if (selectedCategory === "all" || selectedCategory === "home" || postCategory.includes(selectedCategory)) {
+            // Get the categories for the post and split into an array
+            const postCategories = post.getAttribute("data-category")?.toLowerCase() || "";
+            const categoriesArray = postCategories.split(",").map(cat => cat.trim());
+            // Check if the selected category matches any in the array
+            if (selectedCategory === "all" || selectedCategory === "home" || categoriesArray.includes(selectedCategory)) {
                 post.style.display = "block";
             } else {
                 post.style.display = "none";
@@ -61,16 +62,18 @@ document.addEventListener("DOMContentLoaded", () => {
     communityLinks.forEach(link => {
         link.addEventListener("click", (event) => {
             event.preventDefault();
+            toggleSidebar();
 
             // Get the clicked category name
             const selectedCategory = link.textContent.trim().toLowerCase();
             const currentPath = window.location.pathname;
+            console.log(currentPath);
 
             if (currentPath === "/") {
                 // If on the homepage, directly filter posts
                 filterPosts(selectedCategory);
                 history.pushState(null, "", "/");
-            } else if (currentPath === "/viewPost") {
+            } else if (currentPath === "/viewPost" || currentPath === "/create-post") {
                 // If on the viewPost page, redirect to the homepage
                 sessionStorage.setItem("filterCategory", selectedCategory);
                 window.location.href = "/";
@@ -78,17 +81,15 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    // On homepage, check for saved category in sessionStorage
-    if (window.location.pathname === "/") {
-        const savedCategory = sessionStorage.getItem("filterCategory");
-        if (savedCategory) {
-            filterPosts(savedCategory);
-            sessionStorage.removeItem("filterCategory");
-        } else {
-            filterPosts("all");
-        }
+    // On page load, apply the filter if redirected
+    const filterCategory = sessionStorage.getItem("filterCategory");
+    if (filterCategory) {
+        filterPosts(filterCategory);
+        sessionStorage.removeItem("filterCategory");
     }
 });
+
+
 
 
 // Toggle the main dropdown on click
@@ -122,12 +123,11 @@ document.addEventListener('click', function(event) {
 function filterContent(type) {
     // Get the logged-in user's ID
     const userId = document.getElementById('userSection').getAttribute('data-user-id');
-    console.log("User ID:", userId); // Debugging line
 
-    // Get all posts, likes, and comments from the DOM
     const posts = document.querySelectorAll('.post');
 
     let itemsToFilter;
+
 
     switch (type) {
         case 'posts':
@@ -140,8 +140,7 @@ function filterContent(type) {
 
     // Filter and display the items
     itemsToFilter.forEach(item => {
-        const itemUserId = item.getAttribute('data-post-id');
-
+        const itemUserId = item.getAttribute('data-post-user-id');
         if (itemUserId === userId) {
             item.style.display = "block";
         } else {
@@ -180,3 +179,10 @@ function displayContent(data, type) {
     });
 }
 
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const sidebarSection = document.querySelector('.sidebar-section');
+    sidebar.classList.toggle('active');
+    sidebarSection.classList.toggle('active');
+    console.log('Sidebar toggled');
+}

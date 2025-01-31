@@ -1,10 +1,11 @@
-package controllers
+package Test
 
 import (
 	"database/sql"
 	"testing"
 	"time"
 
+	"github.com/Raymond9734/forum.git/BackEnd/controllers"
 	"github.com/Raymond9734/forum.git/BackEnd/database"
 	"github.com/Raymond9734/forum.git/BackEnd/models"
 )
@@ -29,10 +30,18 @@ func TestCommentController_InsertComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		cleanupTestResources()
+	}()
+
+	// Clear tables before test
+	if err := clearDatabaseTables(db); err != nil {
+		t.Fatalf("Failed to clear database tables: %v", err)
+	}
 
 	// Create a CommentController instance
-	cCtrl := NewCommentController(db)
+	cCtrl := controllers.NewCommentController(db)
 
 	// Define a base comment for testing
 	baseComment := models.Comment{
@@ -203,10 +212,18 @@ func TestCommentController_GetCommentsByPostID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		cleanupTestResources()
+	}()
+
+	// Clear tables before test
+	if err := clearDatabaseTables(db); err != nil {
+		t.Fatalf("Failed to clear database tables: %v", err)
+	}
 
 	// Create a CommentController instance
-	cCtrl := NewCommentController(db)
+	cCtrl := controllers.NewCommentController(db)
 
 	// Define a base comment for testing
 	baseComment := models.Comment{
@@ -359,10 +376,18 @@ func TestCommentController_GetCommentCountByPostID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		cleanupTestResources()
+	}()
+
+	// Clear tables before test
+	if err := clearDatabaseTables(db); err != nil {
+		t.Fatalf("Failed to clear database tables: %v", err)
+	}
 
 	// Create a CommentController instance
-	cCtrl := NewCommentController(db)
+	cCtrl := controllers.NewCommentController(db)
 
 	// Insert test comments
 	comment := models.Comment{
@@ -445,10 +470,18 @@ func TestCommentController_DeleteComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		cleanupTestResources()
+	}()
+
+	// Clear tables before test
+	if err := clearDatabaseTables(db); err != nil {
+		t.Fatalf("Failed to clear database tables: %v", err)
+	}
 
 	// Create a CommentController instance
-	cCtrl := NewCommentController(db)
+	cCtrl := controllers.NewCommentController(db)
 
 	// Insert a test comment
 	comment := models.Comment{
@@ -524,10 +557,18 @@ func TestCommentController_IsCommentAuthor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		cleanupTestResources()
+	}()
+
+	// Clear tables before test
+	if err := clearDatabaseTables(db); err != nil {
+		t.Fatalf("Failed to clear database tables: %v", err)
+	}
 
 	// Create a CommentController instance
-	cCtrl := NewCommentController(db)
+	cCtrl := controllers.NewCommentController(db)
 
 	// Insert a test comment
 	comment := models.Comment{
@@ -621,10 +662,18 @@ func TestCommentController_UpdateComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() {
+		db.Close()
+		cleanupTestResources()
+	}()
+
+	// Clear tables before test
+	if err := clearDatabaseTables(db); err != nil {
+		t.Fatalf("Failed to clear database tables: %v", err)
+	}
 
 	// Create a CommentController instance
-	cCtrl := NewCommentController(db)
+	cCtrl := controllers.NewCommentController(db)
 
 	// Insert a test comment
 	comment := models.Comment{

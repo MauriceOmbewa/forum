@@ -1,3 +1,4 @@
+// handles/auth.go
 package handlers
 
 import (
@@ -105,6 +106,17 @@ func LoginHandler(ac *controllers.AuthController) http.HandlerFunc {
 			return
 		}
 
+		// Check for missing fields
+		if req.Username == "" || req.Password == "" {
+			logger.Warning("Login attempt with missing fields")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid input",
+			})
+			return
+		}
+
 		logger.Debug("Login attempt for username: %s", req.Username)
 
 		user, err := ac.AuthenticateUser(req.Username, req.Password)
@@ -113,7 +125,7 @@ func LoginHandler(ac *controllers.AuthController) http.HandlerFunc {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			json.NewEncoder(w).Encode(map[string]string{
-				"error": err.Error(),
+				"error": "Invalid username or password",
 			})
 			return
 		}
@@ -121,8 +133,11 @@ func LoginHandler(ac *controllers.AuthController) http.HandlerFunc {
 		auth.CreateSession(ac.DB, w, user.ID)
 		logger.Info("Successful login for user: %s (ID: %d)", user.Username, user.ID)
 
-		w.WriteHeader(302)
+		// Set headers first
 		w.Header().Set("Content-Type", "application/json")
+		// Then set status code
+		w.WriteHeader(http.StatusFound) // 302 Found
+		// Finally write the response body
 		json.NewEncoder(w).Encode(map[string]string{
 			"redirect": "/",
 		})

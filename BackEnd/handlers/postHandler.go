@@ -3,8 +3,11 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"text/template"
 	"time"
 
 	"github.com/Raymond9734/forum.git/BackEnd/controllers"
@@ -164,51 +167,45 @@ func UpdatePostHandler(pc *controllers.PostController) http.HandlerFunc {
 			return
 		}
 
+		// Get existing post
+		existingPost, err := pc.GetPostByID(postID)
+		if err != nil {
+			logger.Error("Failed to fetch existing post: %v", err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Failed to fetch existing post",
+			})
+			return
+		}
+
 		// Extract form fields
 		title := r.FormValue("title")
 		content := r.FormValue("content")
 		categories := r.FormValue("category")
 
-		// Validate required fields
-		if postID == "" || title == "" || categories == "" {
-			logger.Error("Invalid post update request: missing or empty required fields - remote_addr: %s, method: %s, path: %s",
-				r.RemoteAddr,
-				r.Method,
-				r.URL.Path,
-			)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{
-				"message": "Post ID, title, and categories are required",
-			})
-			return
+		// Only update fields that have been changed
+		if title != "" {
+			existingPost.Title = title
 		}
-
-		// Convert postID to int
-		postIDInt, err := strconv.Atoi(postID)
-		if err != nil {
-			logger.Error("Invalid post ID: %v", err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Invalid post ID",
-			})
-			return
+		if content != "" {
+			existingPost.Content = content
+		}
+		if categories != "" {
+			existingPost.Category = categories
 		}
 
 		// Handle file upload (if a new file is provided)
 		filePath, err := controllers.UploadFile(r, "post-file", userID)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Failed to save file",
-			})
-			return
+		if err == nil && filePath != "" {
+			existingPost.ImageUrl = sql.NullString{
+				String: filePath,
+				Valid:  true,
+			}
 		}
 
-		// Ensure at least one of content or file is provided
-		if content == "" && filePath == "" {
+		// Ensure at least content or image exists
+		if existingPost.Content == "" && !existingPost.ImageUrl.Valid {
 			logger.Warning("Invalid post update request: missing content and image fields - at least one is required - remote_addr: %s, method: %s, path: %s",
 				r.RemoteAddr,
 				r.Method,
@@ -222,26 +219,8 @@ func UpdatePostHandler(pc *controllers.PostController) http.HandlerFunc {
 			return
 		}
 
-		// Get the username of the logged-in user
-		userName := controllers.GetUsernameByID(pc.DB, userID)
-
-		// Create a Post object from the form data
-		updatePost := models.Post{
-			ID:        postIDInt,
-			Title:     title,
-			Author:    userName,
-			UserID:    userID,
-			Category:  categories,
-			Content:   content,
-			Timestamp: time.Now(),
-			ImageUrl: sql.NullString{
-				String: filePath,
-				Valid:  filePath != "",
-			},
-		}
-
 		// Update the post in the database
-		err = pc.UpdatePost(updatePost)
+		err = pc.UpdatePost(existingPost)
 		if err != nil {
 			logger.Error("Failed to update post: %v", err)
 			w.Header().Set("Content-Type", "application/json")
@@ -356,5 +335,102 @@ func DeletePostHandler(pc *controllers.PostController) http.HandlerFunc {
 		json.NewEncoder(w).Encode(map[string]string{
 			"message": "Post deleted successfully",
 		})
+	}
+}
+
+func EditPostHandler(pc *controllers.PostController) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+
+		// Extract post ID from URL
+		postID := r.URL.Query().Get("id")
+		if postID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// Check if user is logged in
+		loggedIn, userID := isLoggedIn(pc.DB, r)
+
+		// Generate CSRF token
+		sessionToken, err := controllers.GetSessionToken(r)
+		if err != nil {
+			logger.Error("Error getting session token: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		csrfToken, _ := controllers.GenerateCSRFToken(pc.DB, sessionToken)
+
+		// Create a PostController instance
+		postController := controllers.NewPostController(pc.DB)
+
+		// Fetch the post from the database
+		post, err := postController.GetPostByID(postID)
+		if err != nil {
+			logger.Error("Failed to fetch post: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Check if the logged-in user is the post author
+		if userID != post.UserID {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		// Create template function map
+		funcMap := template.FuncMap{
+			"formatTime": func(t time.Time) string {
+				return t.Format("Jan 02, 2006 at 15:04")
+			},
+			"split": func(s, sep string) []string {
+				return strings.Split(s, sep)
+			},
+			"dict": func(values ...interface{}) (map[string]interface{}, error) {
+				if len(values)%2 != 0 {
+					return nil, fmt.Errorf("invalid dict call")
+				}
+				dict := make(map[string]interface{}, len(values)/2)
+				for i := 0; i < len(values); i += 2 {
+					key, ok := values[i].(string)
+					if !ok {
+						return nil, fmt.Errorf("dict keys must be strings")
+					}
+					dict[key] = values[i+1]
+				}
+				return dict, nil
+			},
+		}
+
+		// Create template with function map
+		tmpl, err := template.New("layout.html").Funcs(funcMap).ParseFiles(
+			"./FrontEnd/templates/layout.html",
+			"./FrontEnd/templates/editPost.html",
+		)
+		if err != nil {
+			logger.Error("An error occurred while rendering template: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		// Prepare data for the template
+		data := struct {
+			IsAuthenticated bool
+			CSRFToken       string
+			UserID          int
+			Post            models.Post
+		}{
+			IsAuthenticated: loggedIn,
+			CSRFToken:       csrfToken,
+			UserID:          userID,
+			Post:            post,
+		}
+
+		// Render the template
+		err = tmpl.ExecuteTemplate(w, "layout.html", data)
+		if err != nil {
+			logger.Error("An error occurred while rendering template: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }
